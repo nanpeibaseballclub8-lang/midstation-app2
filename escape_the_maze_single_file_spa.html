@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>中間駅ゲーム</title>
+  <style>
+    body { text-align: center; font-family: sans-serif; background: #f0f0f0; }
+    #app { background: white; display: inline-block; padding: 20px; margin-top: 50px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    input { padding: 5px; margin: 5px; width: 200px; }
+    button { padding: 5px 10px; margin: 10px; }
+    #result { margin-top: 20px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>中間駅を探せ！</h1>
+  <div id="app">
+    <div>
+      <input type="text" id="station1" placeholder="駅名を入力 (例: 渋谷)">
+    </div>
+    <div>
+      <input type="text" id="station2" placeholder="駅名を入力 (例: 横浜)">
+    </div>
+    <div>
+      <input type="text" id="station3" placeholder="駅名を入力 (任意)">
+    </div>
+    <div>
+      <input type="text" id="station4" placeholder="駅名を入力 (任意)">
+    </div>
+    <button onclick="findMidpoint()">検索</button>
+    <div id="result"></div>
+  </div>
+  <script>
+    // 駅データ（路線ごとの隣接関係を使ってグラフを作成）
+    const lines = {
+      'JR山手線': [
+        '東京','神田','秋葉原','御徒町','上野','鶯谷','日暮里','西日暮里','田端','駒込','巣鴨','大塚','池袋','目白','高田馬場','新大久保','新宿','代々木','原宿','渋谷','恵比寿','目黒','五反田','大崎','品川','田町','浜松町','新橋','有楽町'
+      ],
+      '東急東横線': [
+        '渋谷','代官山','中目黒','祐天寺','学芸大学','都立大学','自由が丘','田園調布','多摩川','新丸子','武蔵小杉','元住吉','日吉','綱島','大倉山','菊名','妙蓮寺','白楽','東白楽','反町','横浜'
+      ],
+      'JR中央線': [
+        '東京','神田','御茶ノ水','水道橋','飯田橋','市ヶ谷','四ツ谷','信濃町','千駄ケ谷','代々木','新宿','大久保','東中野','中野','高円寺','阿佐ケ谷','荻窪','西荻窪','吉祥寺','三鷹','武蔵境','東小金井','武蔵小金井','国分寺','西国分寺','国立','立川','日野','豊田','八王子','西八王子','高尾'
+      ],
+      'JR南武線': [
+        '川崎','尻手','矢向','鹿島田','平間','向河原','武蔵小杉','武蔵中原','武蔵新城','武蔵溝ノ口','津田山','久地','宿河原','登戸','中野島','稲田堤','矢野口','稲城長沼','南多摩','府中本町','分倍河原','西府','谷保','矢川','西国立','立川'
+      ],
+      'JR青梅線': [
+        '立川','西立川','東中神','中神','昭島','拝島','牛浜','福生','羽村','小作','河辺','東青梅','青梅','宮ノ平','日向和田','石神前','二俣尾','軍畑','沢井','御嶽','川井','古里','鳩ノ巣','白丸','奥多摩'
+      ]
+    };
+
+    // グラフ構築
+    const graph = {};
+    for (let line in lines) {
+      const stations = lines[line];
+      for (let i=0; i<stations.length; i++) {
+        if (!graph[stations[i]]) graph[stations[i]] = new Set();
+        if (i > 0) graph[stations[i]].add(stations[i-1]);
+        if (i < stations.length-1) graph[stations[i]].add(stations[i+1]);
+      }
+    }
+
+    // BFSで最短経路探索
+    function shortestPath(start, goal) {
+      if (!(start in graph) || !(goal in graph)) return null;
+      const queue = [[start]];
+      const visited = new Set([start]);
+      while (queue.length) {
+        const path = queue.shift();
+        const node = path[path.length-1];
+        if (node === goal) return path;
+        for (let neighbor of graph[node]) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            queue.push([...path, neighbor]);
+          }
+        }
+      }
+      return null;
+    }
+
+    function findMidpoint(){
+      const s1 = document.getElementById('station1').value.trim();
+      const s2 = document.getElementById('station2').value.trim();
+      const s3 = document.getElementById('station3').value.trim();
+      const s4 = document.getElementById('station4').value.trim();
+      const result = document.getElementById('result');
+
+      const stations = [s1, s2, s3, s4].filter(s => s);
+      if(stations.length < 2){
+        result.innerText = '駅名を2つ以上入力してください。';
+        return;
+      }
+
+      // 全駅間の最短経路をつなげて1本の経路にする（シンプルに順番通り）
+      let fullPath = [];
+      for (let i = 0; i < stations.length - 1; i++) {
+        const path = shortestPath(stations[i], stations[i+1]);
+        if (!path) {
+          result.innerText = `${stations[i]} から ${stations[i+1]} への経路が見つかりませんでした。`;
+          return;
+        }
+        if (i > 0) path.shift(); // 重複する駅を除く
+        fullPath = fullPath.concat(path);
+      }
+
+      if (fullPath.length === 0) {
+        result.innerText = '経路が見つかりませんでした。';
+        return;
+      }
+
+      const midIndex = Math.floor(fullPath.length/2);
+      result.innerText = `${stations.join(' → ')} の中間駅は「${fullPath[midIndex]}」です！ (経由: ${fullPath.join('→')})`;
+    }
+  </script>
+</body>
+</html>
